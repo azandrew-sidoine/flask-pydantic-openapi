@@ -1,4 +1,13 @@
-.. currentmodule:: flask-pydantic-spec
+.. currentmodule:: flask-pydantic-openapi
+VERSION 0.3.2
+-------------
+
+Release 2023-01-31
+
+- Add ability to add root path to config to add additional prefix in api routes
+- Add ability to hide openapi docs
+
+
 VERSION 0.4.1
 -------------
 
