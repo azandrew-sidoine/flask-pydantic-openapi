@@ -214,5 +214,5 @@ def test_openapi_deprecated():
     api.register(app)
     spec = api.spec
 
-    assert spec["paths"]["/lone"]["post"]["deprecated"] == True
+    assert spec["paths"]["/lone"]["post"]["deprecated"] is True
     assert "deprecated" not in spec["paths"]["/lone"]["get"]

@@ -45,7 +45,7 @@ def test_response_spec():
     assert spec["201"]["description"] == DEFAULT_CODE_DESC["HTTP_201"]
     assert (
         spec["201"]["content"]["application/json"]["schema"]["$ref"].split("/")[-1]
-        == "DemoModel"
+        == "DemoModel"  # noqa: W503
     )
 
     assert spec.get(200) is None
@@ -60,7 +60,7 @@ def test_file_response_spec():
 
     assert (
         spec["200"]["content"]["application/octet-stream"]["schema"]["format"]
-        == "binary"
+        == "binary"  # noqa: W503
     )
     assert (
         spec["200"]["content"]["application/octet-stream"]["schema"]["type"] == "string"

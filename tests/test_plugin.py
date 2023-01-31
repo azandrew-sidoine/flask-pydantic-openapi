@@ -24,7 +24,7 @@ def test_plugin_spec():
     assert user["tags"] == ["api", "test"]
     assert (
         user["requestBody"]["content"]["application/json"]["schema"]["$ref"]
-        == "#/components/schemas/JSON"
+        == "#/components/schemas/JSON"  # noqa: W503
     )
     assert len(user["responses"]) == 3
 

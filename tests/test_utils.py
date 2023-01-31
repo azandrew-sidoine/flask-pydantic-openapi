@@ -81,7 +81,7 @@ def test_parse_resp():
     assert resp_spec["422"]["description"] == "Validation Error"
     assert (
         resp_spec["200"]["content"]["application/json"]["schema"]["$ref"]
-        == "#/components/schemas/DemoModel"
+        == "#/components/schemas/DemoModel"  # noqa: W503
     )
 
     resp_spec = parse_resp(demo_func, 400)
@@ -92,7 +92,7 @@ def test_parse_resp():
 def test_parse_request():
     assert (
         parse_request(demo_func)["content"]["application/json"]["schema"]["$ref"]
-        == "#/components/schemas/DemoModel"
+        == "#/components/schemas/DemoModel"  # noqa: W503
     )
     assert parse_request(demo_class.demo_method) == {}
 
