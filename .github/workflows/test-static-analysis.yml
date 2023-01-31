@@ -28,3 +28,6 @@ jobs:
       - name: Lint with flake8
         run: |
           make style
+      - name: Test with pytest
+        run: |
+          make test
