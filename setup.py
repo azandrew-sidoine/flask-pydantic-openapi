@@ -8,11 +8,7 @@ here = path.abspath(path.dirname(__file__))
 with open(path.join(here, "README.md"), encoding="utf-8") as f:
     readme = f.read()
 
-requires = [
-    'pydantic >=1.2,<2',
-    'inflection >=0.5.0,<1',
-    'nested-lookup >=0.2.21,<1'
-]
+requires = ["pydantic >=1.2,<2", "inflection >=0.5.0,<1", "nested-lookup >=0.2.21,<1"]
 
 
 setup(
