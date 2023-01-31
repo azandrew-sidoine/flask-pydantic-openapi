@@ -33,6 +33,5 @@ jobs:
           make test
       - name: Check formatting
         run: |
-          pip install -r requirements/development.txt
           black --check tests flask_pydantic_openapi
           mypy flask_pydantic_openapi
