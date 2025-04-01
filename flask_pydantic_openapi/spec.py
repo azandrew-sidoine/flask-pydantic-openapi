@@ -1,11 +1,9 @@
-from collections import defaultdict
 from functools import wraps
-from typing import Mapping, Optional, Type, Union, Callable, Iterable, Any, Dict, cast
+from typing import Mapping, Optional, Type, Union, Callable, Iterable, Any, Dict
 
 from flask import Flask, Response as FlaskResponse
 from pydantic import BaseModel
 from inflection import camelize
-from nested_lookup import nested_alter
 
 from . import Request
 from .config import Config
@@ -19,13 +17,8 @@ from .utils import (
     parse_name,
     default_before_handler,
     default_after_handler,
+    update_open_api_schema_definitions,
 )
-
-
-def _move_schema_reference(reference: str) -> str:
-    if "/definitions" in reference:
-        return f"#/components/schemas/{reference.split('/definitions/')[-1]}"
-    return reference
 
 
 class FlaskPydanticOpenapi:
@@ -160,8 +153,10 @@ class FlaskPydanticOpenapi:
                     else:
                         _model = model
                     if _model:
-                        self.models[_model.__name__] = self._get_open_api_schema(
-                            _model.schema()
+                        self.models = update_open_api_schema_definitions(
+                            self.models,
+                            _model.model_json_schema(ref_template='#/components/schemas/{model}'),
+                            _model.__name__
                         )
                     setattr(validation, name, model)
 
@@ -169,8 +164,10 @@ class FlaskPydanticOpenapi:
                 for model in resp.models:
                     if model:
                         assert not isinstance(model, RequestBase)
-                        self.models[model.__name__] = self._get_open_api_schema(
-                            model.schema()
+                        self.models = update_open_api_schema_definitions(
+                            self.models,
+                            model.model_json_schema(ref_template='#/components/schemas/{model}'),
+                            model.__name__
                         )
                 setattr(validation, "resp", resp)
 
@@ -245,68 +242,6 @@ class FlaskPydanticOpenapi:
         }
         return spec
 
-    def _validate_property(self, property: Mapping[str, Any]) -> Dict[str, Any]:
-        allowed_fields = {
-            "title",
-            "multipleOf",
-            "maximum",
-            "exclusiveMaximum",
-            "minimum",
-            "exclusiveMinimum",
-            "maxLength",
-            "minLength",
-            "pattern",
-            "maxItems",
-            "minItems",
-            "uniqueItems",
-            "maxProperties",
-            "minProperties",
-            "required",
-            "enum",
-            "type",
-            "allOf",
-            "anyOf",
-            "oneOf",
-            "not",
-            "items",
-            "properties",
-            "additionalProperties",
-            "description",
-            "format",
-            "default",
-            "nullable",
-            "discriminator",
-            "readOnly",
-            "writeOnly",
-            "xml",
-            "externalDocs",
-            "example",
-            "deprecated",
-            "$ref",
-        }
-        result: Dict[str, Any] = defaultdict(dict)
-
-        for key, value in property.items():
-            for prop, val in value.items():
-                if prop in allowed_fields:
-                    result[key][prop] = val
-
-        return result
-
-    def _get_open_api_schema(self, schema: Mapping[str, Any]) -> Mapping[str, Any]:
-        """
-        Convert a Pydantic model into an OpenAPI compliant schema object.
-        """
-        result = {}
-        for key, value in schema.items():
-            if key == "properties":
-                result[key] = self._validate_property(value)
-            else:
-                result[key] = value
-        return cast(
-            Mapping[str, Any], nested_alter(result, "$ref", _move_schema_reference)
-        )
-
     def _get_model_definitions(self) -> Dict[str, Any]:
         """
         handle nested models
@@ -317,7 +252,7 @@ class FlaskPydanticOpenapi:
                 definitions[model] = schema
             if "definitions" in schema:
                 for key, value in schema["definitions"].items():
-                    definitions[key] = self._get_open_api_schema(value)
+                    definitions = update_open_api_schema_definitions(definitions, value, key)
                 del schema["definitions"]
 
         return definitions
@@ -333,8 +268,10 @@ class FlaskPydanticOpenapi:
         schema = request_body["content"][content_type]["schema"]
         if "$ref" not in schema.keys():
             # handle inline schema definitions
+            schema_ = dict()
+            schema_ = update_open_api_schema_definitions(schema_, schema, 'schema')
             return {
-                "content": {content_type: {"schema": self._get_open_api_schema(schema)}}
+                "content": {content_type: schema_}
             }
         else:
             return request_body

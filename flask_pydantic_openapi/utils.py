@@ -1,8 +1,10 @@
+from collections import defaultdict
 import inspect
 import json
 import logging
 import re
 from json import JSONDecodeError
+from nested_lookup import nested_alter
 
 from typing import (
     Callable,
@@ -13,6 +15,7 @@ from typing import (
     List,
     Dict,
     Iterable,
+    cast,
 )
 
 from werkzeug.datastructures import MultiDict
@@ -260,3 +263,115 @@ def parse_rule(rule: Rule) -> Iterable[Tuple[Optional[str], Optional[str], str]]
         if ">" in remaining or "<" in remaining:
             raise ValueError(f"malformed url rule: {rule_str!r}")
         yield None, None, remaining
+
+
+def _move_schema_reference(reference: str) -> str:
+    if "/definitions" in reference:
+        return f"#/components/schemas/{reference.split('/definitions/')[-1]}"
+    return reference
+
+
+def validate_open_api_schema(property: Mapping[str, Any]) -> Dict[str, Any]:
+    allowed_fields = {
+        "title",
+        "multipleOf",
+        "maximum",
+        "exclusiveMaximum",
+        "minimum",
+        "exclusiveMinimum",
+        "maxLength",
+        "minLength",
+        "pattern",
+        "maxItems",
+        "minItems",
+        "uniqueItems",
+        "maxProperties",
+        "minProperties",
+        "required",
+        "enum",
+        "type",
+        "allOf",
+        "anyOf",
+        "oneOf",
+        "not",
+        "items",
+        "properties",
+        "additionalProperties",
+        "description",
+        "format",
+        "default",
+        "nullable",
+        "discriminator",
+        "readOnly",
+        "writeOnly",
+        "xml",
+        "externalDocs",
+        "example",
+        "deprecated",
+        "$ref",
+    }
+    result: Dict[str, Any] = defaultdict(dict)
+
+    for key, value in property.items():
+        for prop, val in value.items():
+            if prop in allowed_fields:
+                result[key][prop] = val
+
+    return result
+
+
+def update_open_api_schema_definitions(definitions: Dict[str, Any], schema: Mapping[str, Any], namespace: str) -> None:
+    """
+    Convert a Pydantic model into an OpenAPI compliant schema object.
+    """
+
+    embedded = {}
+    if '$defs' in schema and type(schema.get('$defs')) is dict:
+        for name, props in schema.get('$defs').items():
+            embedded[f'{namespace}__{name}'] = props
+            if 'properties' in schema and schema:
+                for _, v in schema.get('properties').items():
+                    if type(v) is dict and '$ref' in v:
+                        ref_value = str(v['$ref'])
+                        if (ref_value.endswith(name)):
+                            ref_value = ref_value[:-len(name)] + str(f'{namespace}__{name}')
+                            v["$ref"] = ref_value
+                            break
+
+                    if type(v) is dict and 'type' in v:
+                        for k in v.keys():
+                            if 'items' == k and type(v[k]) is dict:
+                                for k_ in v[k].keys():
+                                    if k_ == 'anyOf' and type(v[k][k_]) is list:
+                                        print('Items: ', v[k][k_])
+                                        for item in v[k][k_]:
+                                            if type(item) is not dict:
+                                                continue
+
+                                            if 'type' in item and str(item.get('type')).strip() == 'null':
+                                                item['type'] = 'object'
+
+                                            if '$ref' in item:
+                                                ref_value = str(item['$ref'])
+                                                if (ref_value.endswith(name)):
+                                                    ref_value = ref_value[:-
+                                                                          len(name)] + str(f'{namespace}__{name}')
+                                                    item["$ref"] = ref_value
+                                                    continue
+        # remove non pydantic.BaseModel declaration
+        schema.pop('$defs')
+
+    result = {}
+    for key, value in schema.items():
+        if key == "properties":
+            result[key] = validate_open_api_schema(value)
+        else:
+            result[key] = value
+
+    definitions[namespace] = cast(
+        Mapping[str, Any], nested_alter(result, "$ref", _move_schema_reference)
+    )
+
+    definitions.update(embedded)
+
+    return definitions

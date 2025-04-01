@@ -5,6 +5,7 @@ import gzip
 import pytest
 import json
 from flask import Flask, jsonify, request
+from werkzeug import Client
 from werkzeug.datastructures import FileStorage
 
 from flask_pydantic_openapi.types import Response, MultipartFormRequest
@@ -84,7 +85,7 @@ def user_score(name):
     score.sort(
         reverse=request.context.query.order if request.context.query.order else False
     )
-    assert request.context.cookies.pub == "abcdefg"
+    assert request.context.cookies.pub == ["abcdefg"]
     assert request.cookies["pub"] == "abcdefg"
     return jsonify(name=request.context.body.name, score=score)
 
@@ -121,7 +122,7 @@ def client(request):
 
 
 @pytest.mark.parametrize("client", [422], indirect=True)
-def test_flask_validate(client):
+def test_flask_validate(client: Client):
     resp = client.get("/ping")
     assert resp.status_code == 422
     assert resp.headers.get("X-Error") == "Validation Error"
@@ -135,7 +136,7 @@ def test_flask_validate(client):
     assert resp.status_code == 422
     assert resp.headers.get("X-Error") == "Validation Error"
 
-    client.set_cookie("flask", "pub", "abcdefg")
+    client.set_cookie(key="pub", value="abcdefg")
     resp = client.post(
         "/api/user/flask?order=1",
         data=json.dumps(dict(name="flask", limit=10)),
@@ -145,21 +146,21 @@ def test_flask_validate(client):
     assert resp.headers.get("X-Validation") is None
     assert resp.headers.get("X-API") == "OK"
     assert resp.json["name"] == "flask"
-    assert resp.json["score"] == sorted(resp.json["score"], reverse=True)
+    assert list(resp.json["score"]) == list(sorted(resp.json["score"], reverse=True))
 
     resp = client.post(
         "/api/user/flask?order=0",
         data=json.dumps(dict(name="flask", limit=10)),
         content_type="application/json",
     )
-    assert resp.json["score"] == sorted(resp.json["score"], reverse=False)
+    assert list(resp.json["score"]) == list(sorted(resp.json["score"], reverse=False))
 
     resp = client.post(
         "/api/user/flask",
         data=json.dumps(dict(name="flask", limit=10)),
         content_type="application/json",
     )
-    assert resp.json["score"] == sorted(resp.json["score"], reverse=False)
+    assert list(resp.json["score"]) == list(sorted(resp.json["score"], reverse=False))
 
 
 @pytest.mark.parametrize("client", [422], indirect=True)
@@ -233,7 +234,8 @@ def test_flask_post_gzip(client):
     body = dict(name="flask", limit=10)
     compressed = gzip.compress(bytes(json.dumps(body), encoding="utf-8"))
 
-    client.set_cookie("flask", "pub", "abcdefg")
+    # client.set_cookie("flask", "pub", "abcdefg")
+    client.set_cookie("pub", "abcdefg")
     resp = client.post(
         "/api/user/flask?order=0",
         data=compressed,
@@ -251,7 +253,8 @@ def test_flask_post_gzip_failure(client):
     body = dict(name="flask")
     compressed = gzip.compress(bytes(json.dumps(body), encoding="utf-8"))
 
-    client.set_cookie("flask", "pub", "abcdefg")
+    # client.set_cookie("flask", "pub", "abcdefg")
+    client.set_cookie("pub", "abcdefg")
     resp = client.post(
         "/api/user/flask?order=0",
         data=compressed,
@@ -260,7 +263,9 @@ def test_flask_post_gzip_failure(client):
             "content-encoding": "gzip",
         },
     )
+
+    print(resp.json, resp.status_code)
     assert resp.status_code == 400
     assert resp.json == [
-        {"loc": ["limit"], "msg": "field required", "type": "value_error.missing"}
+        {'input': {'name': 'flask'}, "loc": ["limit"], "msg": "Field required", "type": "missing", 'url': 'https://errors.pydantic.dev/2.11/v/missing'}
     ]

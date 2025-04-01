@@ -1,8 +1,8 @@
 from datetime import date
 from enum import IntEnum, Enum
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
-from pydantic import BaseModel, root_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 class Order(IntEnum):
@@ -11,7 +11,7 @@ class Order(IntEnum):
 
 
 class Query(BaseModel):
-    order: Optional[Order]
+    order: Annotated[Order, Optional] | None = Field(None, validate_default=True)
 
 
 class QueryParams(BaseModel):
@@ -44,13 +44,13 @@ class Language(str, Enum):
 class Headers(BaseModel):
     lang: Language
 
-    @root_validator(pre=True, allow_reuse=True)
+    @model_validator(mode='before')
     def lower_keys(cls, values):
         return {key.lower(): value for key, value in values.items()}
 
 
 class Cookies(BaseModel):
-    pub: str
+    pub: List[str]
 
 
 class DemoModel(BaseModel):

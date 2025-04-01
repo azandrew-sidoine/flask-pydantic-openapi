@@ -189,7 +189,7 @@ class MultipartFormRequest(RequestBase):
         return self.model is not None
 
     def generate_spec(self) -> Mapping[str, Any]:
-        model_spec = self.model.schema() if self.model else None
+        model_spec = self.model.model_json_schema(ref_template='#/components/schemas/{model}') if self.model else None
         if model_spec:
             additional_properties = model_spec["properties"]
         else:

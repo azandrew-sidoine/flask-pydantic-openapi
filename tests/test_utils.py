@@ -98,7 +98,7 @@ def test_parse_request():
 
 
 def test_parse_params():
-    models = {"DemoModel": DemoModel.schema()}
+    models = {"DemoModel": DemoModel.model_json_schema(ref_template='#/components/schemas/{model}')}
     assert parse_params(demo_func, [], models) == []
     params = parse_params(demo_class.demo_method, [], models)
     assert len(params) == 3

@@ -1,11 +1,12 @@
 from enum import Enum
-from typing import Optional
+import os
+from typing import Annotated, Optional
 
 import pytest
-from flask import Flask
+from flask import Flask, json
 from typing import List
-from openapi_spec_validator import validate_v3_spec
-from pydantic import BaseModel, StrictFloat, Field
+from openapi_spec_validator import OpenAPIV30SpecValidator, validate
+from pydantic import BaseModel, BeforeValidator, RootModel, StrictFloat, Field
 
 from flask_pydantic_openapi import Response
 from flask_pydantic_openapi.flask_backend import FlaskBackend
@@ -17,7 +18,7 @@ from .common import get_paths
 
 
 class ExampleModel(BaseModel):
-    name: str = Field(strip_whitespace=True)
+    name: Annotated[Annotated[str, BeforeValidator(lambda x: str(x).strip())], Field()]
     age: int
     height: StrictFloat
 
@@ -29,11 +30,11 @@ class TypeEnum(str, Enum):
 
 class ExampleQuery(BaseModel):
     query: str
-    type: Optional[TypeEnum]
+    type: List[Optional[TypeEnum]]
 
 
-class ExampleNestedList(BaseModel):
-    __root__: List[ExampleModel]
+class ExampleNestedList(RootModel[List[ExampleModel]]):
+    ...
 
 
 class ExampleNestedModel(BaseModel):
@@ -43,6 +44,8 @@ class ExampleNestedModel(BaseModel):
 class ExampleDeepNestedModel(BaseModel):
     data: List["ExampleModel"]
 
+class ExampleList(BaseModel):
+    data: list[dict]
 
 def backend_app():
     return [
@@ -95,16 +98,17 @@ def create_app():
     app = Flask(__name__)
 
     @app.route("/foo")
-    @api.validate()
+    @api.validate(resp=Response(HTTP_200=ExampleList),)
     def foo():
         pass
 
     @app.route("/bar")
-    @api_strict.validate()
+    @api_strict.validate(resp=Response(HTTP_200=ExampleList),)
     def bar():
         pass
 
     @app.route("/lone", methods=["GET"])
+    @api.validate(resp=Response(HTTP_200=ExampleList),)
     def lone_get():
         pass
 
@@ -119,7 +123,7 @@ def create_app():
         pass
 
     @app.route("/query", methods=["GET"])
-    @api.validate(query=ExampleQuery)
+    @api.validate(query=ExampleQuery, resp=Response(HTTP_400=ExampleNestedModel))
     def get_query():
         pass
 
@@ -197,7 +201,9 @@ def test_valid_openapi_spec():
     app = create_app()
     api.register(app)
     spec = api.spec
-    validate_v3_spec(spec)
+    with open(os.path.join(os.path.dirname(__file__), 'model.json'), 'w+') as file:
+        json.dump(spec, file)
+    validate(spec, cls=OpenAPIV30SpecValidator)
 
 
 def test_openapi_tags():
