@@ -45,7 +45,7 @@ app = Flask(__name__)
 
 @app.route("/ping")
 @api.validate(headers=Headers, tags=["test", "health"])
-def ping():
+def ping(headers: Headers|None = None):
     """summary
     description"""
     return jsonify(msg="pong")
@@ -56,15 +56,14 @@ def ping():
     query=QueryParams,
     resp=Response(HTTP_200=Users, HTTP_401=None),
 )
-def get_users():
+def get_users(query: QueryParams):
     allowed_names = ["james", "annabel", "bethany"]
-    query_params = request.context.query
     return jsonify(
         {
             "data": [
                 {"name": name}
                 for name in sorted(
-                    set(allowed_names).intersection(set(query_params.name))
+                    set(allowed_names).intersection(set(query.name))
                 )
             ]
         }
@@ -80,14 +79,14 @@ def get_users():
     tags=["api", "test"],
     after=api_after_handler,
 )
-def user_score(name):
-    score = [randint(0, request.context.body.limit) for _ in range(5)]
+def user_score(name, query: Query, body: JSON, cookies:Cookies):
+    score = [randint(0, body.limit) for _ in range(5)]
     score.sort(
-        reverse=request.context.query.order if request.context.query.order else False
+        reverse=query.order if query.order else False
     )
-    assert request.context.cookies.pub == ["abcdefg"]
+    assert cookies.pub == ["abcdefg"]
     assert request.cookies["pub"] == "abcdefg"
-    return jsonify(name=request.context.body.name, score=score)
+    return jsonify(name=body.name, score=score)
 
 
 @app.route("/api/group/<name>", methods=["GET"])
@@ -103,9 +102,8 @@ def group_score(name):
 @api.validate(
     body=MultipartFormRequest(model=FileName), resp=Response(HTTP_200=DemoModel)
 )
-def upload_file():
+def upload_file(body: MultipartFormRequest):
     files = request.files
-    body = request.context.body
     assert body is not None
     assert files is not None
     return jsonify(uid=1, limit=2, name=body.file_name)
@@ -266,6 +264,6 @@ def test_flask_post_gzip_failure(client):
 
     print(resp.json, resp.status_code)
     assert resp.status_code == 400
-    assert resp.json == [
+    assert 'validation_errors' in resp.json and resp.json['validation_errors'] == [
         {'input': {'name': 'flask'}, "loc": ["limit"], "msg": "Field required", "type": "missing", 'url': 'https://errors.pydantic.dev/2.11/v/missing'}
     ]

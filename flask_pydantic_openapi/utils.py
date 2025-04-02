@@ -15,6 +15,8 @@ from typing import (
     List,
     Dict,
     Iterable,
+    Type,
+    Union,
     cast,
 )
 
@@ -23,6 +25,11 @@ from pydantic import BaseModel
 from werkzeug.routing import Rule
 
 from .types import Response, RequestBase, Request
+
+try:
+    from typing import get_args, get_origin
+except ImportError:
+    from typing_extensions import get_args, get_origin
 
 logger = logging.getLogger(__name__)
 
@@ -200,9 +207,18 @@ def default_after_handler(
         )
 
 
-def parse_multi_dict(input: MultiDict) -> Dict[str, Any]:
+def _is_list(type_: Type) -> bool:
+    origin = get_origin(type_)
+    if origin is list:
+        return True
+    if origin is Union:
+        return any(_is_list(t) for t in get_args(type_))
+    return False
+
+
+def parse_multi_dict(query_params: MultiDict, model: type[BaseModel]) -> Dict[str, Any]:
     result = {}
-    for key, value in input.to_dict(flat=False).items():
+    for key, value in query_params.to_dict(flat=False).items():
         if len(value) == 1:
             try:
                 value_to_use = json.loads(value[0])
@@ -211,7 +227,16 @@ def parse_multi_dict(input: MultiDict) -> Dict[str, Any]:
         else:
             value_to_use = value
         result[key] = value_to_use
-    return result
+
+    return result if model is None else {
+        **result,
+        **{
+            key: value
+            for key, value in result.items()
+            if key in model.model_fields
+            and _is_list(model.model_fields[key].annotation)
+        },
+    }
 
 
 RE_PARSE_RULE = re.compile(
