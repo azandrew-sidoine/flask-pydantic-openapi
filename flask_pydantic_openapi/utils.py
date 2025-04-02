@@ -368,7 +368,6 @@ def update_open_api_schema_definitions(definitions: Dict[str, Any], schema: Mapp
                             if 'items' == k and type(v[k]) is dict:
                                 for k_ in v[k].keys():
                                     if k_ == 'anyOf' and type(v[k][k_]) is list:
-                                        print('Items: ', v[k][k_])
                                         for item in v[k][k_]:
                                             if type(item) is not dict:
                                                 continue
