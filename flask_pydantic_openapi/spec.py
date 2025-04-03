@@ -107,6 +107,10 @@ class FlaskPydanticOpenapi:
         deprecated: bool = False,
         before: Optional[Callable] = None,
         after: Optional[Callable] = None,
+        on_success_status: int | None = None,
+        response_by_alias: bool = False,
+        response_exclude_none: bool = False,
+        excluded: list[str] = [],
     ) -> Callable:
         """
         - validate query, body, headers in request
@@ -123,6 +127,10 @@ class FlaskPydanticOpenapi:
          that they should be transitioned out of usage
         :param before: :meth:`spectree.utils.default_before_handler` for specific endpoint
         :param after: :meth:`spectree.utils.default_after_handler` for specific endpoint
+        :param on_success_status: status code for success responses. default=200
+        :param response_by_alias: whether Pydantic's alias is used
+        :param response_exclude_none: whether to remove None fields from response
+        :param excluded: List decorated function parameters that should be exluded when validating parameters
         """
 
         def decorate_validation(func: Callable) -> Callable:
@@ -137,6 +145,10 @@ class FlaskPydanticOpenapi:
                     resp,
                     before or self.before,
                     after or self.after,
+                    on_success_status,
+                    response_by_alias,
+                    response_exclude_none,
+                    excluded,
                     *args,
                     **kwargs,
                 )

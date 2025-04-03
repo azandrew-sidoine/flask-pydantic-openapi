@@ -278,8 +278,9 @@ class FlaskBackend:
 
     Request parameters (query, body, headers, cookies) are accessible directly via `kwargs`, if you define them in the decorated function.
 
-    `response_exclude_none` whether to remove None fields from response
+    `on_success_status` status code for success responses. default=200
     `response_by_alias` whether Pydantic's alias is used
+    `response_exclude_none` whether to remove None fields from response
     `excluded` - List decorated function parameters that should be exluded when validating parameters
 
     example::
