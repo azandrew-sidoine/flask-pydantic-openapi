@@ -1,5 +1,5 @@
 from functools import wraps
-from typing import Mapping, Optional, Type, Union, Callable, Iterable, Any, Dict
+from typing import Mapping, Optional, Type, Union, Callable, Iterable, Any, Dict, cast
 
 from flask import Flask, Response as FlaskResponse
 from pydantic import BaseModel
@@ -111,6 +111,9 @@ class FlaskPydanticOpenapi:
         response_by_alias: bool = False,
         response_exclude_none: bool = False,
         excluded: list[str] = [],
+        attributes: list[str] = [],
+        include_url: bool = False,
+        include_context: bool = False,
     ) -> Callable:
         """
         - validate query, body, headers in request
@@ -131,6 +134,7 @@ class FlaskPydanticOpenapi:
         :param response_by_alias: whether Pydantic's alias is used
         :param response_exclude_none: whether to remove None fields from response
         :param excluded: List decorated function parameters that should be exluded when validating parameters
+        :param attributes: List of attributes (a.k.a params to route handler) that must be merged to into validation model
         """
 
         def decorate_validation(func: Callable) -> Callable:
@@ -149,6 +153,9 @@ class FlaskPydanticOpenapi:
                     response_by_alias,
                     response_exclude_none,
                     excluded,
+                    attributes,
+                    include_url=include_url,
+                    include_context=include_context,
                     *args,
                     **kwargs,
                 )
@@ -167,8 +174,9 @@ class FlaskPydanticOpenapi:
                     if _model:
                         self.models = update_open_api_schema_definitions(
                             self.models,
-                            _model.model_json_schema(ref_template='#/components/schemas/{model}'),
-                            _model.__name__
+                            cast(BaseModel, _model).model_json_schema(
+                                ref_template='#/components/schemas/{model}'),
+                            cast(BaseModel, _model).__name__
                         )
                     setattr(validation, name, model)
 

@@ -78,6 +78,7 @@ def get_users(query: QueryParams):
     resp=Response(HTTP_200=Resp, HTTP_401=None),
     tags=["api", "test"],
     after=api_after_handler,
+    include_url=True,
 )
 def user_score(name, query: Query, body: JSON, cookies:Cookies):
     score = [randint(0, body.limit) for _ in range(5)]

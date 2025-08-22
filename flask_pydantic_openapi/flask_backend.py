@@ -2,7 +2,7 @@ import gzip
 import json
 import logging
 
-from typing import Optional, Mapping, Callable, Any, Tuple, List, Type, Iterable, Dict, Union
+from typing import Optional, Mapping, Callable, Any, Tuple, List, Type, Iterable, Dict, Union, cast
 from dataclasses import dataclass
 
 from pydantic import TypeAdapter, ValidationError, BaseModel
@@ -34,9 +34,9 @@ def make_json_response(
 ) -> FlaskResponse:
     """serializes model, creates JSON response with given status code"""
     if many:
-        js = f"[{', '.join([model.model_dump_json(exclude_none=exclude_none, by_alias=by_alias) for model in content])}]"
+        js = f"[{', '.join([cast(BaseModel, model).model_dump_json(exclude_none=exclude_none, by_alias=by_alias) for model in content])}]"
     else:
-        js = content.model_dump_json(exclude_none=exclude_none, by_alias=by_alias)
+        js = cast(BaseModel, content).model_dump_json(exclude_none=exclude_none, by_alias=by_alias)
     response = make_response(js, status_code)
     response.mimetype = "application/json"
     return response
@@ -53,7 +53,11 @@ def unsupported_media_type_response(request_cont_type: str) -> FlaskResponse:
 # region utils
 
 
-def validate_path_params(func: Callable, kwargs: dict, excluded: list[str] = []) -> Tuple[dict, list]:
+def validate_path_params(func: Callable,
+                         kwargs: dict,
+                         excluded: list[str] = [],
+                         include_context: bool = True,
+                         include_url: bool = True) -> Tuple[Dict[str, Any], list]:
     errors = []
     validated = {}
     for name, type_ in func.__annotations__.items():
@@ -63,7 +67,8 @@ def validate_path_params(func: Callable, kwargs: dict, excluded: list[str] = [])
             adapter = TypeAdapter(type_)
             validated[name] = adapter.validate_python(kwargs.get(name))
         except ValidationError as e:
-            err = e.errors()[0]
+            err = cast(dict, e.errors(include_url=include_url,
+                                      include_context=include_context,)[0])
             err["loc"] = [name]
             errors.append(err)
     kwargs = {**kwargs, **validated}
@@ -204,9 +209,10 @@ class FlaskBackend:
         body: Optional[RequestBase],
         headers: Optional[Type[BaseModel]],
         cookies: Optional[Type[BaseModel]],
+        request_attributes: Dict[str, Any] | None = None
     ) -> list[tuple[str, type[BaseModel]]]:
 
-        body_model: type[BaseModel] = getattr(
+        body_model: type[BaseModel] | None = getattr(
             body, "model") if body and getattr(body, "model") else None
 
         def validated_query(model: type[BaseModel] | None):
@@ -215,6 +221,9 @@ class FlaskBackend:
 
             raw_query = request.args or None
             req_query = parse_multi_dict(raw_query, model=model) if raw_query is not None else {}
+
+            if request_attributes is not None:
+                req_query.update(request_attributes)
 
             return model.model_validate(req_query)
 
@@ -234,6 +243,9 @@ class FlaskBackend:
                 parsed_body = parse_multi_dict(request.form, model=model) if request.form else {}
             else:
                 parsed_body = request.get_data() or {}
+
+            if isinstance(parsed_body, dict) and request_attributes is not None:
+                parsed_body.update(request_attributes)
 
             return model.model_validate(parsed_body)
 
@@ -269,6 +281,9 @@ class FlaskBackend:
         response_by_alias: bool = False,
         response_exclude_none: bool = False,
         excluded: list[str] = [],
+        attributes: list[str] = [],
+        include_url: bool = False,
+        include_context: bool = False,
         *args: List[Any],
         **kwargs: Mapping[str, Any],
     ) -> FlaskResponse:
@@ -282,6 +297,7 @@ class FlaskBackend:
     `response_by_alias` whether Pydantic's alias is used
     `response_exclude_none` whether to remove None fields from response
     `excluded` - List decorated function parameters that should be exluded when validating parameters
+    `attributes` - List of attibutes (a.k.a parameter to the request handler) that should be merged as property to validation model
 
     example::
 
@@ -322,21 +338,36 @@ class FlaskBackend:
     -> that will render JSON response with serialized MyModel instance
     """
 
-        # Check if paths should be validated
-        kwargs, err = validate_path_params(func, kwargs, excluded=list(
-            set(excluded + ['query', 'body', 'headers', 'cookies'])))
+        # check if paths should be validated
+        kwargs, err = validate_path_params(func,
+                                           kwargs,
+                                           excluded=list(
+                                               set(excluded + ['query', 'body', 'headers', 'cookies'])),
+                                           include_url=include_url,
+                                           include_context=include_context,)
         if err:
             return make_response(
                 jsonify(dict(validation_errors=err)), self.config.VALIDATION_ERROR_CODE
             )
 
+        request_attributes = {p: kwargs.get(p)
+                              for p in attributes if kwargs.get(p, None) is not None}
         response, req_validation_error, resp_validation_error, params = None, None, None, None
         try:
-            params = self.request_validation(request, query, body, headers, cookies)
+            params = self.request_validation(
+                request,
+                query,
+                body,
+                headers,
+                cookies,
+                request_attributes=request_attributes)
+
         except PydanticValidationErrorWrapper as err:
             req_validation_error = err
             response = make_response(
-                jsonify(dict(validation_errors=err.error.errors())), self.config.VALIDATION_ERROR_CODE
+                jsonify(dict(validation_errors=err.error.errors(include_url=include_url,
+                                                                include_context=include_context))
+                        ), self.config.VALIDATION_ERROR_CODE
             )
 
         before(request, response, req_validation_error, None)
@@ -348,7 +379,7 @@ class FlaskBackend:
         if params:
             for key, model in params:
                 if func.__annotations__.get(key):
-                    kwargs[key] = model
+                    kwargs[key] = cast(Mapping[str, Any], model)
 
         response = make_response(func(*args, **kwargs))
 
@@ -364,7 +395,8 @@ class FlaskBackend:
                     response = make_json_response(model, status_code=on_success_status if on_success_status else response.status_code,
                                                   by_alias=response_by_alias, exclude_none=response_exclude_none)
                 except ValidationError as err:
-                    resp_validation_error = PydanticValidationErrorWrapper(model=model, error=err)
+                    resp_validation_error = PydanticValidationErrorWrapper(
+                        model=cast(type[BaseModel], model), error=err)
                     response = make_response(jsonify(dict(validation_errors=err.errors())), 500)
 
         after(request, response, resp_validation_error, None)

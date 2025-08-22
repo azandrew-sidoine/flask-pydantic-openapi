@@ -207,7 +207,7 @@ def default_after_handler(
         )
 
 
-def _is_list(type_: Type) -> bool:
+def _is_list(type_: Type | None) -> bool:
     origin = get_origin(type_)
     if origin is list:
         return True
@@ -345,17 +345,17 @@ def validate_open_api_schema(property: Mapping[str, Any]) -> Dict[str, Any]:
     return result
 
 
-def update_open_api_schema_definitions(definitions: Dict[str, Any], schema: Mapping[str, Any], namespace: str) -> None:
+def update_open_api_schema_definitions(definitions: Dict[str, Any], schema: Mapping[str, Any], namespace: str) -> Dict[str, Any]:
     """
     Convert a Pydantic model into an OpenAPI compliant schema object.
     """
 
     embedded = {}
     if '$defs' in schema and type(schema.get('$defs')) is dict:
-        for name, props in schema.get('$defs').items():
+        for name, props in cast(dict, schema.get('$defs')).items():
             embedded[f'{namespace}__{name}'] = props
-            if 'properties' in schema and schema:
-                for _, v in schema.get('properties').items():
+            if 'properties' in schema and type(schema.get('properties')) is dict:
+                for _, v in cast(dict, schema.get('properties')).items():
                     if type(v) is dict and '$ref' in v:
                         ref_value = str(v['$ref'])
                         if (ref_value.endswith(name)):
@@ -383,7 +383,7 @@ def update_open_api_schema_definitions(definitions: Dict[str, Any], schema: Mapp
                                                     item["$ref"] = ref_value
                                                     continue
         # remove non pydantic.BaseModel declaration
-        schema.pop('$defs')
+        cast(dict, schema).pop('$defs')
 
     result = {}
     for key, value in schema.items():
