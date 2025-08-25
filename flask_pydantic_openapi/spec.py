@@ -114,6 +114,7 @@ class FlaskPydanticOpenapi:
         attributes: list[str] = [],
         include_url: bool = False,
         include_context: bool = False,
+        silent: bool = True,
     ) -> Callable:
         """
         - validate query, body, headers in request
@@ -135,6 +136,7 @@ class FlaskPydanticOpenapi:
         :param response_exclude_none: whether to remove None fields from response
         :param excluded: List decorated function parameters that should be exluded when validating parameters
         :param attributes: List of attributes (a.k.a params to route handler) that must be merged to into validation model
+        :param silent: when `True`, errors during request body parsing are ignored by the implementation
         """
 
         def decorate_validation(func: Callable) -> Callable:
@@ -156,6 +158,7 @@ class FlaskPydanticOpenapi:
                     attributes,
                     include_url=include_url,
                     include_context=include_context,
+                    silent=silent,
                     *args,
                     **kwargs,
                 )

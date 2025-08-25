@@ -209,7 +209,8 @@ class FlaskBackend:
         body: Optional[RequestBase],
         headers: Optional[Type[BaseModel]],
         cookies: Optional[Type[BaseModel]],
-        request_attributes: Dict[str, Any] | None = None
+        request_attributes: Dict[str, Any] | None = None,
+        silent: bool = False
     ) -> list[tuple[str, type[BaseModel]]]:
 
         body_model: type[BaseModel] | None = getattr(
@@ -236,13 +237,14 @@ class FlaskBackend:
                     raw_body = gzip.decompress(request.stream.read()).decode(
                         encoding="utf-8"
                     )
-                    parsed_body = json.loads(raw_body)
+                    parsed_body = json.loads(raw_body) if raw_body.strip() != '' else {}
                 else:
-                    parsed_body = request.get_json() or {}
+                    parsed_body = request.get_json(silent=silent) or {}
             elif request.content_type and "multipart/form-data" in request.content_type:
                 parsed_body = parse_multi_dict(request.form, model=model) if request.form else {}
             else:
-                parsed_body = request.get_data() or {}
+                # by default only care about the request form attribute
+                parsed_body = parse_multi_dict(request.form, model=model) if request.form else {}
 
             if isinstance(parsed_body, dict) and request_attributes is not None:
                 parsed_body.update(request_attributes)
@@ -282,6 +284,7 @@ class FlaskBackend:
         response_exclude_none: bool = False,
         excluded: list[str] = [],
         attributes: list[str] = [],
+        silent: bool = False,
         include_url: bool = False,
         include_context: bool = False,
         *args: List[Any],
@@ -360,7 +363,8 @@ class FlaskBackend:
                 body,
                 headers,
                 cookies,
-                request_attributes=request_attributes)
+                request_attributes=request_attributes,
+                silent=silent)
 
         except PydanticValidationErrorWrapper as err:
             req_validation_error = err
