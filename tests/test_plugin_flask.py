@@ -65,7 +65,8 @@ def get_users(query: QueryParams):
                 for name in sorted(
                     set(allowed_names).intersection(set(query.name))
                 )
-            ]
+            ],
+            "columns": query.columns if query.columns is not None else []
         }
     )
 
@@ -182,7 +183,8 @@ def test_sending_file(client):
 
 @pytest.mark.parametrize("client", [422], indirect=True)
 def test_query_params(client):
-    resp = client.get("api/user?name=james&name=bethany&name=claire")
+    resp = client.get("api/user?name=james&name=bethany&name=claire&columns[]=id&columns[]=label")
+    print(type(resp))
     assert resp.status_code == 200
     assert len(resp.json["data"]) == 2
     assert resp.json["data"] == [
@@ -193,6 +195,7 @@ def test_query_params(client):
             "name": "james",
         },
     ]
+    assert resp.json["columns"] == ['id', 'label']
 
 
 @pytest.mark.parametrize("client", [200], indirect=True)

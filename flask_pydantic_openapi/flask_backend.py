@@ -221,7 +221,7 @@ class FlaskBackend:
                 return None
 
             raw_query = request.args or None
-            req_query = parse_multi_dict(raw_query, model=model) if raw_query is not None else {}
+            req_query = parse_multi_dict(raw_query, model=model, rename_list_param=True) if raw_query is not None else {}
 
             if request_attributes is not None:
                 req_query.update(request_attributes)

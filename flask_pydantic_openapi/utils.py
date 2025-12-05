@@ -216,7 +216,7 @@ def _is_list(type_: Type | None) -> bool:
     return False
 
 
-def parse_multi_dict(query_params: MultiDict, model: type[BaseModel]) -> Dict[str, Any]:
+def parse_multi_dict(query_params: MultiDict, model: type[BaseModel], rename_list_param: bool = False) -> Dict[str, Any]:
     result = {}
     for key, value in query_params.to_dict(flat=False).items():
         if len(value) == 1:
@@ -226,6 +226,9 @@ def parse_multi_dict(query_params: MultiDict, model: type[BaseModel]) -> Dict[st
                 value_to_use = value[0]
         else:
             value_to_use = value
+            length = len('[]')
+            key = key[:-length] if rename_list_param and key[-length:] == '[]' else key
+
         result[key] = value_to_use
 
     return result if model is None else {

@@ -16,6 +16,7 @@ class Query(BaseModel):
 
 class QueryParams(BaseModel):
     name: Optional[List[str]]
+    columns: Optional[List[str]]
 
 
 class User(BaseModel):
@@ -24,6 +25,7 @@ class User(BaseModel):
 
 class Users(BaseModel):
     data: List[User]
+    columns: List[str]
 
 
 class JSON(BaseModel):
